@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "septic_canary"
+version = "0.0.0"
+description = ""
+authors = ["Dan Moran <danxmoran@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.70.0"
+pydantic = "^1.8.2"
+uvicorn = "^0.15.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
