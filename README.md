@@ -18,15 +18,20 @@ docker run --rm \
   -p 8000:80 \
   -e HOUSE_CANARY_API_KEY="${your-api-key}" \
   -e HOUSE_CANARY_API_SECRET="${your-api-secret}" \
+  -e API_USERNAME="${username-for-api}" \
+  -e API_PASSWORD="${password-for-api}" \
   septic-canary-test
-# Navigate to http://localhost:8000/docs in your browser to interact with the API via OpenAPI
+# Navigate to http://localhost:8000/docs in your browser to interact with the API via OpenAPI.
+# Use the configured API_USERNAME and API_PASSWORD to authenticate.
 ```
 
 If you'd rather not use `docker`, you can alternatively run the project directly using `poetry`.
 Install `poetry` using [these directions](https://python-poetry.org/docs/master/#installation), then run:
 ```shell
-HOUSE_CANARY_API_KEY="${your-api-key}" HOUSE_CANARY_API_SECRET="${your-api-secret}" poetry run uvicorn septic_canary.main:app
-# Navigate to http://localhost:8000/docs in your browser to interact with the API via OpenAPI
+HOUSE_CANARY_API_KEY="${your-api-key}" HOUSE_CANARY_API_SECRET="${your-api-secret}" API_USERNAME="${username-for-api}" API_PASSWORD="${password-for-api}" \
+  poetry run uvicorn septic_canary.main:app
+# Navigate to http://localhost:8000/docs in your browser to interact with the API via OpenAPI.
+# Use the configured API_USERNAME and API_PASSWORD to authenticate.
 ```
 
 ### Configuring the project
@@ -80,6 +85,7 @@ The service exposes a single API, `GET /api/v1/property/details`. Its request an
 translating HouseCanary's unique `GET /v2/property/details` API into a more standardized form, targeted at our use-case
 of checking septic systems.
 * The API is versioned (starting at `v1`) to allow for future redesigns.
+* The API is protected via Basic authentication. A single username/password combo is permitted; all others are rejected.
 * Request parameters include `street`, `unit`, `city`, `state`, and `zip`. They are passed as URL params.
   * I used `street` instead of `address` (the HouseCanary equivalent) to be more specific.
   * I used `zip` instead of `zipcode` (the HouseCanary equivalent) because as a user of APIs, I've found myself annoyed
@@ -90,6 +96,7 @@ of checking septic systems.
   * If consumers wanted to know about different types of sewer systems, `has_septic_system` could be deprecated and
     a new `sewer_system_type` enum could be added to the response.
 * A variety of error responses are possible.
+  * `401`: Returned if the request is missing Basic auth / if it provides incorrect credentials.
   * `422`: Returned if the client doesn't provide enough parameters to attempt address resolution.
   * `429`: Returned if HouseCanary returns a `429` (too many requests) code, because the end client is the one that
     ultimately needs to be rate-limited. Includes a [`Retry-After`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After)
@@ -98,16 +105,13 @@ of checking septic systems.
   * `500`: Returned if HouseCanary returns any other error code (`400` or `401` according to their API docs), because
     any other potential error means our service has a bug.
 
-Note that there is (currently) no auth on the API. I considered having users pass their HouseCanary credentials through
-as part of requests, but that breaks the abstraction the service is meant to provide.
-
 ## Things I'd do differently in a "real" project
 
 ### API design
 I would have:
 * Consulted with teammates & potential users on the names of request parameters, instead of arbitrarily
   changing the names from HouseCanary's existing API
-* Added auth to the service
+* Used a more sophisticated auth system
 
 ### Project layout
 I would have:

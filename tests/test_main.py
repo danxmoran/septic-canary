@@ -3,6 +3,7 @@ import json
 import time
 
 from fastapi import HTTPException
+from fastapi.security import HTTPBasicCredentials
 import pytest
 from requests_mock import Mocker
 
@@ -12,8 +13,15 @@ settings = main.AppSettings(
     house_canary_api_base_url='http://base.url',
     house_canary_api_key='foo',
     house_canary_api_secret='bar',
+    api_username='me',
+    api_password='supersecretplsnotell'
 )
 encoded_auth = b64encode(f"{settings.house_canary_api_key}:{settings.house_canary_api_secret}".encode()).decode()
+good_creds = HTTPBasicCredentials(username=settings.api_username, password=settings.api_password)
+
+
+def get_details(**kwargs):
+    return main.property_details(settings=settings, credentials=good_creds, **kwargs)
 
 
 def test_get_property_details_with_septic(requests_mock: Mocker):
@@ -37,7 +45,7 @@ def test_get_property_details_with_septic(requests_mock: Mocker):
         })
     )
 
-    details = main.property_details(street="123 Street", zip=98765, settings=settings)
+    details = get_details(street="123 Street", zip=98765)
     assert details.has_septic_system
 
 
@@ -62,7 +70,7 @@ def test_get_property_details_without_septic(requests_mock: Mocker):
         })
     )
 
-    details = main.property_details(street="123 Street", zip=98765, settings=settings)
+    details = get_details(street="123 Street", zip=98765)
     assert not details.has_septic_system
 
 
@@ -87,13 +95,20 @@ def test_get_property_details_with_unit_city_state(requests_mock: Mocker):
         })
     )
 
-    details = main.property_details(street="123 Street", unit="10f", city="Big", state="MA", settings=settings)
+    details = get_details(street="123 Street", unit="10f", city="Big", state="MA")
     assert details.has_septic_system
+
+
+def test_get_property_details_bad_auth():
+    with pytest.raises(HTTPException) as exc_info:
+        main.property_details(street='', settings=settings,
+                              credentials=HTTPBasicCredentials(username='foo', password='bar'))
+    assert exc_info.value.status_code == 401
 
 
 def test_get_property_details_missing_params():
     with pytest.raises(HTTPException) as exc_info:
-        main.property_details(street="123 Street", city="Big")
+        get_details(street="123 Street", city="Big")
     assert exc_info.value.status_code == 422
 
 
@@ -106,7 +121,7 @@ def test_get_property_details_bad_internal_auth(requests_mock: Mocker):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        main.property_details(street="123 Street", zip=98765, settings=settings)
+        get_details(street="123 Street", zip=98765)
     assert exc_info.value.status_code == 500
 
 
@@ -120,7 +135,7 @@ def test_get_property_details_malformed_internal_request(requests_mock: Mocker):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        main.property_details(street="123 Street", zip=98765, settings=settings)
+        get_details(street="123 Street", zip=98765)
     assert exc_info.value.status_code == 500
 
 
@@ -138,7 +153,7 @@ def test_get_property_details_address_fails_resolution(requests_mock: Mocker):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        main.property_details(street="123 Street", zip=98765, settings=settings)
+        get_details(street="123 Street", zip=98765)
     assert exc_info.value.status_code == 404
 
 
@@ -153,6 +168,6 @@ def test_get_property_details_rate_limit(requests_mock: Mocker):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        main.property_details(street="123 Street", zip=98765, settings=settings, get_current_time=lambda: now)
+        get_details(street="123 Street", zip=98765, get_current_time=lambda: now)
     assert exc_info.value.status_code == 429
     assert int(exc_info.value.headers["Retry-After"]) == 1000

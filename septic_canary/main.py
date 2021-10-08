@@ -1,10 +1,12 @@
 from functools import lru_cache
 import logging
+import secrets
 import time
 from typing import Callable, Optional
 
 import requests
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, BaseSettings
 
 
@@ -17,6 +19,9 @@ class AppSettings(BaseSettings):
     house_canary_api_base_url: str = "https://api.housecanary.com"
     house_canary_api_key: str
     house_canary_api_secret: str
+
+    api_username: str
+    api_password: str
 
     class Config:
         env_file = ".env"
@@ -48,7 +53,7 @@ class PropertyDetails(BaseModel):
 
 logger = logging.getLogger("uvicorn")
 app = FastAPI()
-
+security = HTTPBasic()
 
 @app.get("/api/v1/property/details")
 def property_details(
@@ -58,6 +63,7 @@ def property_details(
         state: Optional[str] = None,
         zip: Optional[int] = None,
         settings: AppSettings = Depends(get_settings),
+        credentials: HTTPBasicCredentials = Depends(security),
         get_current_time: Callable[[], int] = Depends(get_now),
 ) -> PropertyDetails:
     """
@@ -71,9 +77,16 @@ def property_details(
     :param state: State containing the property
     :param zip: ZIP code containing the property
     :param settings: Application settings
+    :param credentials: HTTP Basic credentials passed in the request
     :param get_current_time: No-arg function that returns the current UTC epoch in seconds
     :return: Details about the specified property
     """
+    # Authenticate the request.
+    correct_username = secrets.compare_digest(credentials.username, settings.api_username)
+    correct_password = secrets.compare_digest(credentials.password, settings.api_password)
+    if not (correct_username and correct_password):
+        raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
+
     # Check we have enough information to locate the property.
     if not zip and not (city and state):
         raise HTTPException(status_code=422, detail="either 'zip' or both 'city' and 'state' must be specified")
