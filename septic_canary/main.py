@@ -1,7 +1,7 @@
 from functools import lru_cache
 import logging
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 from fastapi import Depends, FastAPI, HTTPException
@@ -22,6 +22,10 @@ def get_settings():
     return AppSettings()
 
 
+def get_now() -> int:
+    return int(time.time())
+
+
 class PropertyDetails(BaseModel):
     has_septic_system: bool
 
@@ -38,6 +42,7 @@ def property_details(
         state: Optional[str] = None,
         zip: Optional[int] = None,
         settings: AppSettings = Depends(get_settings),
+        get_current_time: Callable[[], int] = Depends(get_now),
 ) -> PropertyDetails:
     # Check we have enough information to locate the property.
     if not zip and not (city and state):
@@ -62,7 +67,7 @@ def property_details(
         # Pass rate-limit errors through to the client so they know to back off.
         if res.status_code == 429:
             limit_reset_time = int(res.headers["X-RateLimit-Reset"])
-            now = time.time()
+            now = get_current_time()
             retry_after = limit_reset_time - now
             raise HTTPException(status_code=429, detail="Too many requests", headers={"Retry-After": retry_after})
 
@@ -72,17 +77,15 @@ def property_details(
             status_code=500,
             detail="an error occurred while looking up property details, see server logs for more info",
         )
+    res_body = res.json()
 
-    # Parse the HomeCanary response.
-    home_canary_details = res.json()["property/details"]
-    if home_canary_details["api_code"] != 0:
-        raise HTTPException(
-            status_code=500,
-            detail="an error occurred while looking up property details, see server logs for more info",
-        )
-    property_details = home_canary_details["property"]
+    # Check the HomeCanary response to see if it was able to resolve the address.
+    resolution_status = res_body["address_info"]["status"]
+    if not bool(resolution_status["match"]):
+        raise HTTPException(status_code=404, detail="could not resolve address using given parameters")
 
-    # Extract the specific details we care about from the parsed response.
+    # Extract the specific details we care about from the response.
+    property_details = res_body["property/details"]["result"]["property"]
     property_has_septic_system = "sewer" in property_details and property_details["sewer"].lower() == "septic"
 
     return PropertyDetails(has_septic_system=property_has_septic_system)

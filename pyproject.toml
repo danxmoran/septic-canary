@@ -12,6 +12,8 @@ uvicorn = "^0.15.0"
 requests = "^2.26.0"
 
 [tool.poetry.dev-dependencies]
+pytest = "^6.2.5"
+requests-mock = "^1.9.3"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
