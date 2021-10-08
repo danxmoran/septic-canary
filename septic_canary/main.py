@@ -9,6 +9,11 @@ from pydantic import BaseModel, BaseSettings
 
 
 class AppSettings(BaseSettings):
+    """
+    AppSettings models the configuration used by the service.
+
+    Settings can be injected either via env var, or via a `.env` file.
+    """
     house_canary_api_base_url: str = "https://api.housecanary.com"
     house_canary_api_key: str
     house_canary_api_secret: str
@@ -19,14 +24,25 @@ class AppSettings(BaseSettings):
 
 @lru_cache
 def get_settings():
+    """
+    Load application settings from the environment / from disk.
+
+    The settings returned by this function are cached.
+    """
     return AppSettings()
 
 
 def get_now() -> int:
+    """
+    Get the current UTC epoch in seconds.
+    """
     return int(time.time())
 
 
 class PropertyDetails(BaseModel):
+    """
+    PropertyDetails models all information about a property returned by this service.
+    """
     has_septic_system: bool
 
 
@@ -44,6 +60,20 @@ def property_details(
         settings: AppSettings = Depends(get_settings),
         get_current_time: Callable[[], int] = Depends(get_now),
 ) -> PropertyDetails:
+    """
+    Look up details about a requested property.
+
+    `address` must be provided, along with either `zip` or both `city` and `state`.
+
+    :param street: Street address of the property
+    :param unit: Unit of the property within the building at `street`
+    :param city: City containing the property
+    :param state: State containing the property
+    :param zip: ZIP code containing the property
+    :param settings: Application settings
+    :param get_current_time: No-arg function that returns the current UTC epoch in seconds
+    :return: Details about the specified property
+    """
     # Check we have enough information to locate the property.
     if not zip and not (city and state):
         raise HTTPException(status_code=422, detail="either 'zip' or both 'city' and 'state' must be specified")
@@ -66,6 +96,9 @@ def property_details(
 
         # Pass rate-limit errors through to the client so they know to back off.
         if res.status_code == 429:
+            # HouseCanary returns `X-RateLimit-Reset: <UTC-epoch-second when it's OK to retry>`.
+            # A more standard response would be `Retry-After: <seconds to wait before retrying>`
+            # We translate between the two forms.
             limit_reset_time = int(res.headers["X-RateLimit-Reset"])
             now = get_current_time()
             retry_after = limit_reset_time - now
