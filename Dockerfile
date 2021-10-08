@@ -11,9 +11,15 @@ RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/inst
     ln -s /opt/poetry/bin/poetry && \
     poetry config virtualenvs.create false
 
-# Add project files.
+# Install dependencies
 COPY ./pyproject.toml ./poetry.lock /app/
+RUN poetry install --no-root --no-dev
+
+# Add sources
 COPY ./septic_canary /app/septic_canary
+
+# Add default config
+COPY ./.env.example /app/.env
 
 ENV PYTHONPATH=/app
 ENV MODULE_NAME=septic_canary.main
