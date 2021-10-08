@@ -108,16 +108,40 @@ of checking septic systems.
 ## Things I'd do differently in a "real" project
 
 ### API design
-I would have:
-* Consulted with teammates & potential users on the names of request parameters, instead of arbitrarily
-  changing the names from HouseCanary's existing API
-* Used a more sophisticated auth system
+I chose to change some of the parameter names from the HomeCanary API when designing this middleware. In a real
+project I would have consulted with teammates and potential users before making that choice, in case my opinions
+about "better" names don't match how others want to use the service.
+
+For simplicity, I chose to protect the service via Basic auth, with only 1 valid username/password combo passed in
+at runtime via configuration. In a real project that setup might be viable at the very beginning of the project, but
+I'd expect it to eventually get replaced by something more sophisticated like OAuth.
 
 ### Project layout
-I would have:
-* Split the main code up into multiple files, so as the service grew it could retain a maintainable structure
+To keep things simple, I wrote all of this project's code in one file, and most of it in a single function within
+that file. In a real project that sort of pattern would quickly become un-maintainable as the project grew. To avoid
+problems, I'd first want to split up the logic into helper functions, then split up the function definitions across
+multiple files / modules. FastAPI isn't opinionated about project layout so I'd need to consult with teammates about
+a directory structure that made sense for the service.
 
 ### Testing
-I would have:
-* Registered for an account with HouseCanary so I could query their sandbox environment and sanity-check that
-  the mock responses I use in unit tests actually reflect reality
+The unit tests in this project mock out all HTTP requests to HouseCanary, returning fake response payloads based on
+my interpretation of their API docs. Ideally I could have manually run a few test queries against the HouseCanary API
+to verify that my understanding of the response schemas was correct, but I wasn't able to find a way to sign up for a
+test / free account on their website without contacting their sales team. In a real project I would have pushed
+through that process to get a real API key/secret pair for use in manual testing.
+
+I also would have wanted to set up some integration/e2e tests to fully cover the HTTP layer of the app (vs. the unit
+tests, which bypass the request-parsing layer to exercise the business logic directly).  Depending on the rate-limits
+imposed by HouseCanary on the use of their sandbox / test API calls, those tests would be set up either to query
+HouseCanary directly or to query a minimal "fake" HouseCanary server that we'd need to write as another web service.
+
+### Continuous integration
+In a real project I'd set up a CI pipeline to validate pull requests. In addition to running unit and integration tests,
+I'd want the pipeline to check linting rules to ensure the project adhered to the team's chosen style standards. The
+Python ecosystem has a handful of solid linters (i.e. `black`, `mypy`) that I'd consider using for this step.
+
+### Developer experience
+The commands used to build & test the project are non-trivial, and probably not something we'd want the team to have
+to remember. While the commands are currently documented in this `README.md`, we could improve the developer experience
+by moving them into shell scripts / a `Makefile` that the team could call as short-hand. This sort of infrastructure
+would become progressively more useful as we added more types of builds/tests/linting.
